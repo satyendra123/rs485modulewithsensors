@@ -151,3 +151,219 @@ void loop() {
     Serial.println(soil_bulk_permittivity);
     delay(2000);
 }
+
+// Example-3 this is my SHT20 temperature and humidity sensor which gives the data through rs485 port. so it also support the modbus. so we will see both the ways to read the sensor data.
+/*
+  This code demonstrates how to interact with an Arduino Mega 2560 and
+  a Modbus RTU temperature and humidity sensor (SHT20). It reads the
+  temperature and humidity values every 1 seconds and display data to
+  the serial monitor.
+
+  Note: Serial Port 0 is not used to connect the RS485 Converter (MAX485)
+  because its used for debugging. The Serial Port 1 (TX1, RX1) is used
+  for ModBus communication interface.
+
+  Wiring of Sensor, Arduino, and MAX485 TTL to RS485 Converter:
+  ___________________________________________________________________________________________
+  | Sensor (SHT20)   |   MAX485 TTL to RS485 Converter
+  |  A (Yellow)      |        A (Terminal block)
+  |  B (White)       |        B (Terminal block)
+  |  GND (Black)     |       GND (External Supply)
+  |  Vs (Red)        |      9-30V (External Supply)
+  ___________________________________________________________________________________________
+  | MAX485 TTL to RS485 Converter  |  Arduino (Hardware Serial)  |  Arduino (Software Serial)
+  |     RO (Reciever Output)       |        D19 (RX1)            |          D9 (RX)
+  |     RE (Reciever Enable)       |        D2                   |          D2
+  |     DE (Driver Enable)         |        D3                   |          D3
+  |     DI (Driver Input)          |        D18 (TX1)            |          D10 (TX)
+  ___________________________________________________________________________________________
+*/
+
+#include <ModbusMaster.h>
+
+#define MAX485_RE_NEG  2
+#define MAX485_DE      3
+
+ModbusMaster node;
+
+void preTransmission() {
+  digitalWrite(MAX485_RE_NEG, 1);
+  digitalWrite(MAX485_DE, 1);
+}
+
+void postTransmission() {
+  digitalWrite(MAX485_RE_NEG, 0);
+  digitalWrite(MAX485_DE, 0);
+}
+
+void setup() {
+  // Initialize control pins
+  pinMode(MAX485_RE_NEG, OUTPUT);
+  pinMode(MAX485_DE, OUTPUT);
+  digitalWrite(MAX485_RE_NEG, 0);
+  digitalWrite(MAX485_DE, 0);
+
+  // Modbus communication runs at 9600 baud
+  Serial.begin(9600);
+  Serial1.begin(9600);
+
+  // Modbus slave ID 1
+  node.begin(1, Serial1);
+
+  // Callbacks allow us to configure the RS485 transceiver correctly
+  node.preTransmission(preTransmission);
+  node.postTransmission(postTransmission);
+}
+
+void loop() {
+  // Request 2 registers starting at 0x0001
+  uint8_t result = node.readInputRegisters(0x0001, 2);
+  Serial.println("Data Requested");
+
+  if (result == node.ku8MBSuccess) {
+    // Get response data from sensor
+    Serial.print("Temperature: ");
+    Serial.print(float(node.getResponseBuffer(0) / 10.00F));
+    Serial.print("   Humidity: ");
+    Serial.println(float(node.getResponseBuffer(1) / 10.00F));
+  }
+  delay(1000);
+}
+
+Note- same isi chiz ko hum dekhte hai ki mai softwareserial ke sath kaise karunga.
+
+/*
+  This code demonstrates how to interact with an Arduino Mega 2560 and
+  a Modbus RTU temperature and humidity sensor (SHT20). It reads the
+  temperature and humidity values every 1 seconds and display data to
+  the serial monitor.
+
+  Note: Serial Port 0 is not used to connect the RS485 Converter (MAX485)
+  because its used for debugging. The Serial Port 1 (TX1, RX1) is used
+  for ModBus communication interface.
+
+  Wiring of Sensor, Arduino, and MAX485 TTL to RS485 Converter:
+  ___________________________________________________________________________________________
+  | Sensor (SHT20)   |   MAX485 TTL to RS485 Converter
+  |  A (Yellow)      |        A (Terminal block)
+  |  B (White)       |        B (Terminal block)
+  |  GND (Black)     |       GND (External Supply)
+  |  Vs (Red)        |      9-30V (External Supply)
+  ___________________________________________________________________________________________
+  | MAX485 TTL to RS485 Converter  |  Arduino (Hardware Serial)  |  Arduino (Software Serial)
+  |     RO (Reciever Output)       |        D19 (RX1)            |          D9 (RX)
+  |     RE (Reciever Enable)       |        D2                   |          D2
+  |     DE (Driver Enable)         |        D3                   |          D3
+  |     DI (Driver Input)          |        D18 (TX1)            |          D10 (TX)
+  ___________________________________________________________________________________________
+*/
+
+#include <ModbusMaster.h>
+#include <SoftwareSerial.h>
+
+#define MAX485_RE_NEG  2
+#define MAX485_DE      3
+#define SSERIAL_RX_PIN 10
+#define SSERIAL_TX_PIN 11
+
+SoftwareSerial RS485Serial(SSERIAL_RX_PIN, SSERIAL_TX_PIN);
+ModbusMaster node;
+
+void preTransmission() {
+  digitalWrite(MAX485_RE_NEG, 1);
+  digitalWrite(MAX485_DE, 1);
+}
+
+void postTransmission() {
+  digitalWrite(MAX485_RE_NEG, 0);
+  digitalWrite(MAX485_DE, 0);
+}
+
+void setup() {
+  // Initialize control pins
+  pinMode(MAX485_RE_NEG, OUTPUT);
+  pinMode(MAX485_DE, OUTPUT);
+  digitalWrite(MAX485_RE_NEG, 0);
+  digitalWrite(MAX485_DE, 0);
+
+  // Modbus communication runs at 9600 baud
+  Serial.begin(9600);
+  RS485Serial.begin(9600);
+
+  // Modbus slave ID 1
+  node.begin(1, RS485Serial);
+
+  // Callbacks allow us to configure the RS485 transceiver correctly
+  node.preTransmission(preTransmission);
+  node.postTransmission(postTransmission);
+}
+
+void loop() {
+  // Request 2 registers starting at 0x0001
+  uint8_t result = node.readInputRegisters(0x0001, 2);
+  Serial.println("Data Requested");
+
+  if (result == node.ku8MBSuccess) {
+    // Get response data from sensor
+    Serial.print("Temperature: ");
+    Serial.print(float(node.getResponseBuffer(0) / 10.00F));
+    Serial.print("   Humidity: ");
+    Serial.println(float(node.getResponseBuffer(1) / 10.00F));
+  }
+  delay(1000);
+}
+//EXAMPLE-4 ab hum finally dekhte hai ki bina modbus ka use kiye hum kaise data ko read kar sakte hai
+#include <SoftwareSerial.h>
+
+SoftwareSerial sht20(8, 9);
+
+byte tempRequest[8] = {0x01, 0x04, 0x00, 0x01, 0x00, 0x01, 0x60, 0x0a};
+int lastRequest = 0;
+char receivedByte;
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  while(!Serial) {
+    ;
+  }
+
+  sht20.begin(9600);
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  if (millis() - lastRequest > 10000) {
+    for (int i = 0; i < 8; i++) {
+      sht20.write(tempRequest[i]);
+    }
+    lastRequest = millis();
+  }
+
+  while (sht20.available()) {
+    receivedByte = sht20.read();
+    Serial.print(receivedByte, HEX);
+  }
+  Serial.println();
+}
+
+// Compute the MODBUS RTU CRC
+uint16_t ModRTU_CRC(byte * buf, int len)
+{
+  uint16_t crc = 0xFFFF;
+  
+  for (int pos = 0; pos < len; pos++) {
+    crc ^= (uint16_t)buf[pos];          // XOR byte into least sig. byte of crc
+  
+    for (int i = 8; i != 0; i--) {    // Loop over each bit
+      if ((crc & 0x0001) != 0) {      // If the LSB is set
+        crc >>= 1;                    // Shift right and XOR 0xA001
+        crc ^= 0xA001;
+      }
+      else                            // Else LSB is not set
+        crc >>= 1;                    // Just shift right
+    }
+  }
+  // Note, this number has low and high bytes swapped, so use it accordingly (or swap bytes)
+  return crc;  
+}

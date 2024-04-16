@@ -74,7 +74,7 @@ while True:
     time.sleep(0.1)
 
 
-//EXAMPLE-2 this is the SHT20 sensor which gives the data through rs485tottl. so we will see both the ways here one is using the software serial. and the other one is using the modbus
+//EXAMPLE-2 this is the TDR sensor which gives the data through rs485tottl. so we will see both the ways here one is using the software serial. and the other one is using the modbus
 #include <SoftwareSerial.h>
 #include <Wire.h>
 

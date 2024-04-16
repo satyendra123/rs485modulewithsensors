@@ -367,3 +367,393 @@ uint16_t ModRTU_CRC(byte * buf, int len)
   // Note, this number has low and high bytes swapped, so use it accordingly (or swap bytes)
   return crc;  
 }
+//EXAMPLE-5   Welcome to JP Learning. jp learn se maine ye code liya hai jo ki bina modbusmaster ke sensor ka data read karta hai. lekin ye sensor jo hai modbus bhi support krta hai so hum aage dekhenege
+//ki isse hum sensor ke data ko kaise read kar sakte hai
+*/
+#include <SoftwareSerial.h>
+
+// GPIO Pins
+byte TX_PIN = 4, RX_PIN = 5;
+byte DE_RE_PIN = 16, LED_PIN = 2;
+
+SoftwareSerial Soft_Serial(RX_PIN, TX_PIN);
+
+// Variables
+byte no_Byte, incomingByte[9] = { 0 };
+
+// Modbus Request Bytes
+byte type = 2; // (1=Humidity, 2=Temperature, 3=Humidity and Temperature)
+
+// byte sendBuffer[] = { 0x01, 0x03, 0x00, 0x00, 0x00, 0x01, 0x84, 0x0A };  // Valid (Single Read for Humidity)
+// byte sendBuffer[] = { 0x01, 0x04, 0x00, 0x00, 0x00, 0x01, 0x31, 0xCA };  // Invalid (Single Read for Humidity)
+
+
+byte sendBuffer[] = { 0x01, 0x03, 0x00, 0x01, 0x00, 0x01, 0xD5, 0xCA };  // Valid (Single Read for Temperature)
+// byte sendBuffer[] = { 0x01, 0x04, 0x00, 0x01, 0x00, 0x01, 0x60, 0x0A };  // Invalid (Single Read for Temperature)
+
+// byte sendBuffer[] = { 0x01, 0x03, 0x00, 0x00, 0x00, 0x02, 0xC4, 0x0B }; // Valid (Read for Humidity and Temperature)
+// byte sendBuffer[] = { 0x01, 0x04, 0x00, 0x00, 0x00, 0x02, 0x71, 0xCB }; // Invalid (Read for Humidity and Temperature)
+// byte sendBuffer[] = { 0x02, 0x03, 0x00, 0x00, 0x00, 0x02, 0xC4, 0x38 }; // Invalid (Read for Humidity and Temperature)
+
+float humidity, temperature;
+void setup() {
+  Serial.begin(115200);
+  Soft_Serial.begin(9600);
+
+  pinMode(DE_RE_PIN, OUTPUT);  //DE/RE Controling pin of RS-485
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, HIGH);
+
+  Serial.println("\n\nWelcome to JP Learning\n");
+}
+
+void loop() {
+  read_Modbus();
+
+  if (no_Byte >= 7) {
+    String incomingBytesInString[no_Byte];
+    // Serial.println("\n\nno_Byte = " + String(no_Byte));
+    for (int i = 0; i < no_Byte; i++) {
+      // Serial.print("incomingByte[" + String(i) + "] = ");
+      // Serial.println(String(incomingByte[i]) + " " + String(incomingByte[i], HEX));
+
+      if (String(incomingByte[i]).length() == 1)
+        incomingBytesInString[i] = "0" + String(incomingByte[i], HEX);
+      else
+        incomingBytesInString[i] = String(incomingByte[i], HEX);
+    }
+
+    if (type == 1) {
+      String dataTemp = incomingBytesInString[3] + incomingBytesInString[4];
+      Serial.println("\ndataTemp = " + dataTemp);
+      int value = hexToDec(dataTemp);
+      Serial.println("value = " + String(value));
+      humidity = float(value) / 10;
+
+      Serial.println("\nHumidity = " + String(humidity, 2) + " %\n\n");
+    } else if (type == 2) {
+      String dataTemp = incomingBytesInString[3] + incomingBytesInString[4];
+      Serial.println("\ndataTemp = " + dataTemp);
+      int value = hexToDec(dataTemp);
+      Serial.println("value = " + String(value));
+      temperature = float(value) / 10;
+
+      Serial.println("\nTemperature = " + String(temperature, 2) + " °C\n\n");
+    } else if (type == 3) {
+      String dataTemp = incomingBytesInString[3] + incomingBytesInString[4];
+      Serial.println("\ndataTemp = " + dataTemp);
+      int value = hexToDec(dataTemp);
+      Serial.println("value = " + String(value));
+      humidity = float(value) / 10;
+
+      dataTemp = incomingBytesInString[5] + incomingBytesInString[6];
+      Serial.println("dataTemp = " + dataTemp);
+      value = hexToDec(dataTemp);
+      Serial.println("value = " + String(value));
+      temperature = float(value) / 10;
+
+      Serial.println("\nHumidity = " + String(humidity, 2) + " %");
+      Serial.println("Temperature = " + String(temperature, 2) + " °C\n\n");
+    }
+
+    no_Byte = 0;
+  }
+  delay(5000);
+}
+
+void read_Modbus() {
+  // Transmition Enable
+  digitalWrite(DE_RE_PIN, HIGH);  //DE/RE=HIGH Transmit Enabled
+
+  // Serial.println("\n\nsizeof(sendBuffer): " + String(sizeof(sendBuffer)));
+  // for (byte i = 0; i < sizeof(sendBuffer); i++) {
+  //   Serial.println("Request: " + String(sendBuffer[i], DEC) + " " + String(sendBuffer[i], HEX));
+  // }
+  // Serial.println();
+  Soft_Serial.write(sendBuffer, sizeof(sendBuffer));
+
+  // Receiving Enable
+  digitalWrite(DE_RE_PIN, LOW);  //DE/RE=LOW Receive Enabled
+
+  while (Soft_Serial.available() > 0) {
+    //    Serial.println(Soft_Serial.read(), HEX);
+    byte temp = Soft_Serial.read();
+    Serial.println("Response: " + String(temp, DEC) + " " + String(temp, HEX));
+    incomingByte[no_Byte] = temp;
+    no_Byte++;
+  }
+}
+
+int hexToDec(String hexString) {
+  int decValue = 0, nextInt;
+  for (int i = 0; i < hexString.length(); i++) {
+    nextInt = int(hexString.charAt(i));
+    if (nextInt >= 48 && nextInt <= 57) nextInt = map(nextInt, 48, 57, 0, 9);
+    if (nextInt >= 65 && nextInt <= 70) nextInt = map(nextInt, 65, 70, 10, 15);
+    if (nextInt >= 97 && nextInt <= 102) nextInt = map(nextInt, 97, 102, 10, 15);
+    nextInt = constrain(nextInt, 0, 15);
+    decValue = (decValue * 16) + nextInt;
+  }
+  return decValue;
+}
+
+//EXAMPLE-6 same upar wale code ko hum dekhte hai ki modbus ka use karke kaise read karenge kyuki humara jo ye sensor hai ye modbus ko bhi support karta hai
+/*
+  Welcome to JP Learning
+*/
+#include <SoftwareSerial.h>
+#include <ModbusMaster.h>
+
+// GPIO Pins
+byte TX_PIN = 4, RX_PIN = 5;
+byte DE_RE_PIN = 16, LED_PIN = 2;
+
+SoftwareSerial Soft_Serial(RX_PIN, TX_PIN);
+
+ModbusMaster node;
+
+// Variables
+#define Sensor_ID 1
+// #define Sensor_ID 2
+#define Reg_Address 0x0000 // for Humidity and Temperature
+#define Reg_Address1 0x0000 // for Humidity
+#define Reg_Address2 0x0001 // for Temperature
+float humidity, temperature;
+
+void preTransmission() {
+  digitalWrite(DE_RE_PIN, HIGH);
+}
+void postTransmission() {
+  digitalWrite(DE_RE_PIN, LOW);
+}
+
+void setup() {
+  Serial.begin(115200);
+  Soft_Serial.begin(9600);
+
+  pinMode(DE_RE_PIN, OUTPUT);  //DE/RE Controling pin of RS-485
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, HIGH);
+
+  node.begin(Sensor_ID, Soft_Serial);
+  node.preTransmission(preTransmission);
+  node.postTransmission(postTransmission);
+  
+  Serial.println("\n\nWelcome to JP Learning\n");
+}
+
+void loop() {
+  // Serial.println("\nHumidity = " + String((float)Read_Data2(Reg_Address1) / 10, 2) + " %");
+  // delay(100);
+  // Serial.println("Temperature = " + String((float)Read_Data2(Reg_Address2) / 10, 2) + " °C\n\n");
+  // delay(100);
+
+  Read_Data();
+  Serial.println("\nHumidity = " + String(humidity, 2) + " %");
+  Serial.println("Temperature = " + String(temperature, 2) + " °C\n\n");
+  delay(5000);
+}
+long Read_Data2(int Reg_Addr)
+{
+  uint8_t result, j;
+  long value = 0;
+  byte dataReadLength = 1;
+  uint16_t data[dataReadLength];
+
+  // Disable watchdog reset
+  ESP.wdtDisable();
+
+  result = node.readHoldingRegisters(Reg_Addr, dataReadLength);
+  // result = node.readInputRegisters(Reg_Addr, dataReadLength);
+  // Serial.println("result: " + String(result, HEX) + ", " + String(result));
+
+  // Enable watchdog reset
+  ESP.wdtEnable(1);
+
+  if (result == node.ku8MBSuccess) {
+    for (j = 0; j < dataReadLength; j++)
+      data[j] = (node.getResponseBuffer(j));
+
+    // Serial.println("data[0]: " + String(data[0], HEX) + " " + String(data[0]));
+
+    String dataTemp = String(data[0], HEX);
+    // Serial.println("\ndataTemp = " + dataTemp);
+    int value = hexToDec(dataTemp);
+    Serial.println("\nvalue = " + String(value));
+    return value;
+  } else {
+    Serial.print("Connect modbus fail. REG >>> "); Serial.println(Reg_Addr); // Debug
+    delay(1000);
+    return 0;
+  }
+}
+void Read_Data() {
+  uint8_t result, j;
+  long value = 0;
+  byte dataReadLength = 2;
+  uint16_t data[dataReadLength];
+
+  // Disable watchdog reset
+  ESP.wdtDisable();
+
+  result = node.readHoldingRegisters(Reg_Address, dataReadLength);
+
+  // Enable watchdog reset
+  ESP.wdtEnable(1);
+
+  if (result == node.ku8MBSuccess) {
+    for (j = 0; j < dataReadLength; j++)
+      data[j] = (node.getResponseBuffer(j));
+
+    Serial.println("data[0]: " + String(data[0], HEX) + " " + String(data[0]));
+    Serial.println("data[1]: " + String(data[1], HEX) + " " + String(data[1]));
+
+    int value = hexToDec(String(data[0], HEX));
+    Serial.println("\nvalue = " + String(value));
+    humidity = (float)value / 10;
+    value = hexToDec(String(data[1], HEX));
+    Serial.println("value = " + String(value));
+    temperature = (float)value / 10;
+  } else {
+    Serial.print("Connect modbus fail. REG >>> ");
+    Serial.println(Reg_Address);  // Debug
+    delay(1000);
+  }
+}
+int hexToDec(String hexString) {
+  int decValue = 0, nextInt;
+  for (int i = 0; i < hexString.length(); i++) {
+    nextInt = int(hexString.charAt(i));
+    if (nextInt >= 48 && nextInt <= 57) nextInt = map(nextInt, 48, 57, 0, 9);
+    if (nextInt >= 65 && nextInt <= 70) nextInt = map(nextInt, 65, 70, 10, 15);
+    if (nextInt >= 97 && nextInt <= 102) nextInt = map(nextInt, 97, 102, 10, 15);
+    nextInt = constrain(nextInt, 0, 15);
+    decValue = (decValue * 16) + nextInt;
+  }
+  return decValue;
+}
+//EXAMPLE-6 iseme mere pass ek PGS sensor hai jo ki rs485 par mujhe data send karti hai.hum dekhte hai ki hum ise kaise read karte hai
+/*
+#include <SoftwareSerial.h>
+
+// Define the data packets
+byte data_packets[][8] = {
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x39, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x35, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x39, 0x33, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x34, 0x39, 0x36, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x39, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x38, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x32, 0x35, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x35, 0x39, 0x33, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x34, 0x39, 0x38, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x39, 0x33, 0x8C}
+};
+
+// Define the number of data packets
+#define NUM_PACKETS 10
+
+// Define RS485 pin connections
+#define RS485_RX 3
+#define RS485_TX 2
+
+// Initialize SoftwareSerial for RS485 communication
+SoftwareSerial RS485Serial(RS485_RX, RS485_TX);
+
+void setup() {
+  // Initialize serial communication for debugging
+  Serial.begin(9600);
+  
+  // Initialize RS485 communication
+  RS485Serial.begin(9600);
+}
+
+void loop() {
+  // Loop through the data packets and send them individually
+  for (int i = 0; i < NUM_PACKETS; i++) {
+    // Send the data packet
+    for (int j = 0; j < 8; j++) {
+      RS485Serial.write(data_packets[i][j]);
+      Serial.print("0x");
+      if (data_packets[i][j] < 0x10) {
+        Serial.print("0");
+      }
+      Serial.print(data_packets[i][j], HEX);
+      Serial.print(" ");
+    }
+    Serial.println(); // Print a new line after each packet is sent
+    // Delay for 2 seconds between sending packets
+    delay(2000);
+  }
+}
+*/
+//Example-2 send the request bytes and capture the response
+#include <SoftwareSerial.h>
+
+// Define the data packets
+byte data_packets[][8] = {
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x39, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x35, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x39, 0x33, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x34, 0x39, 0x36, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x39, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x38, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x32, 0x35, 0x37, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x35, 0x39, 0x33, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x34, 0x39, 0x38, 0x8C},
+  {0xAA, 0x05, 0x17, 0x03, 0x31, 0x39, 0x33, 0x8C}
+};
+
+// Define the number of data packets
+#define NUM_PACKETS 10
+
+// Define RS485 pin connections
+#define RS485_RX 3
+#define RS485_TX 2
+
+// Initialize SoftwareSerial for RS485 communication
+SoftwareSerial RS485Serial(RS485_RX, RS485_TX);
+
+void setup() {
+  // Initialize serial communication for debugging
+  Serial.begin(9600);
+  
+  // Initialize RS485 communication
+  RS485Serial.begin(9600);
+}
+
+void loop() {
+  // Loop through the data packets and send them individually
+  for (int i = 0; i < NUM_PACKETS; i++) {
+    // Send the data packet
+    for (int j = 0; j < 8; j++) {
+      RS485Serial.write(data_packets[i][j]);
+      Serial.print("Sent: 0x");
+      if (data_packets[i][j] < 0x10) {
+        Serial.print("0");
+      }
+      Serial.print(data_packets[i][j], HEX);
+      Serial.print(" ");
+    }
+    Serial.println(); // Print a new line after each packet is sent
+    
+    // Capture and print response
+    delay(100); // Allow some time for response to arrive
+    while (RS485Serial.available()) {
+      byte responseByte = RS485Serial.read();
+      Serial.print("Received: 0x");
+      if (responseByte < 0x10) {
+        Serial.print("0");
+      }
+      Serial.print(responseByte, HEX);
+      Serial.print(" ");
+    }
+    Serial.println(); // Print a new line after capturing response
+    
+    // Delay for 2 seconds between sending packets
+    delay(2000);
+  }
+}
+
+//
+
